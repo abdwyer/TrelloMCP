@@ -216,6 +216,71 @@ class TrelloClient:
             params["due"] = due
         return self._request("POST", "/cards", params=params)
 
+    def create_cards(
+        self,
+        list_id: str,
+        cards: list[dict[str, Any]],
+        delay_ms: int = 0,
+    ) -> dict[str, Any]:
+        """Create multiple cards in a list.
+
+        Args:
+            list_id: The list ID where cards will be created
+            cards: List of card dicts with keys: name (required), desc, pos, due
+            delay_ms: Delay between API calls in milliseconds
+
+        Returns:
+            Dict with success_count, error_count, results, and created lists
+        """
+        import time
+
+        results = []
+        created = []
+        success_count = 0
+        error_count = 0
+
+        for i, card_data in enumerate(cards):
+            # Add delay between requests (except for first one)
+            if delay_ms > 0 and i > 0:
+                time.sleep(delay_ms / 1000.0)
+
+            try:
+                # Validate required field
+                if "name" not in card_data:
+                    raise ValueError("Card 'name' is required")
+
+                # Create the card using existing method
+                card = self.create_card(
+                    list_id=list_id,
+                    name=card_data["name"],
+                    desc=card_data.get("desc"),
+                    pos=card_data.get("pos"),
+                    due=card_data.get("due"),
+                )
+                results.append({
+                    "index": i,
+                    "success": True,
+                    "card": card,
+                })
+                created.append(card)
+                success_count += 1
+            except Exception as e:
+                results.append({
+                    "index": i,
+                    "success": False,
+                    "error": str(e),
+                    "input": card_data,
+                })
+                error_count += 1
+
+        return {
+            "success_count": success_count,
+            "error_count": error_count,
+            "total": len(cards),
+            "results": results,
+            "created": created,
+        }
+
     def update_card(
         self,
         card_id: str,
@@ -437,6 +502,107 @@ class TrelloClient:
         if pos:
             params["pos"] = pos
         return self._request("POST", f"/checklists/{checklist_id}/checkItems", params=params)
+
+    def add_checklist_items(
+        self,
+        checklist_id: str,
+        items: list[dict[str, Any]],
+        delay_ms: int = 0,
+    ) -> dict[str, Any]:
+        """Add multiple items to a checklist.
+
+        Args:
+            checklist_id: The checklist ID
+            items: List of item dicts with keys: name (required), checked, pos
+            delay_ms: Delay between API calls in milliseconds
+
+        Returns:
+            Dict with success_count, error_count, results, and created lists
+        """
+        import time
+
+        results = []
+        created = []
+        success_count = 0
+        error_count = 0
+
+        for i, item_data in enumerate(items):
+            # Add delay between requests (except for first one)
+            if delay_ms > 0 and i > 0:
+                time.sleep(delay_ms / 1000.0)
+
+            try:
+                # Validate required field
+                if "name" not in item_data:
+                    raise ValueError("Item 'name' is required")
+
+                # Create the item using existing method
+                item = self.add_checklist_item(
+                    checklist_id=checklist_id,
+                    name=item_data["name"],
+                    checked=item_data.get("checked"),
+                    pos=item_data.get("pos"),
+                )
+                results.append({
+                    "index": i,
+                    "success": True,
+                    "item": item,
+                })
+                created.append(item)
+                success_count += 1
+            except Exception as e:
+                results.append({
+                    "index": i,
+                    "success": False,
+                    "error": str(e),
+                    "input": item_data,
+                })
+                error_count += 1
+
+        return {
+            "success_count": success_count,
+            "error_count": error_count,
+            "total": len(items),
+            "results": results,
+            "created": created,
+        }
+
+    def create_checklist_with_items(
+        self,
+        card_id: str,
+        name: str,
+        items: list[dict[str, Any]],
+        pos: Optional[str] = None,
+        delay_ms: int = 0,
+    ) -> dict[str, Any]:
+        """Create a checklist and populate it with items.
+
+        Args:
+            card_id: The card ID to add the checklist to
+            name: Name of the checklist
+            items: List of item dicts with keys: name (required), checked, pos
+            pos: Position of the checklist (top, bottom, or a positive number)
+            delay_ms: Delay between API calls in milliseconds
+
+        Returns:
+            Dict with checklist object and items results
+        """
+        # First, create the checklist
+        checklist = self.create_checklist(card_id, name, pos)
+
+        # Then add all items
+        items_result = self.add_checklist_items(
+            checklist["id"], items, delay_ms
+        )
+
+        return {
+            "checklist": checklist,
+            "items_success_count": items_result["success_count"],
+            "items_error_count": items_result["error_count"],
+            "items_total": items_result["total"],
+            "items_results": items_result["results"],
+            "items_created": items_result["created"],
+        }
 
     def update_checklist_item(
         self,
@@ -732,13 +898,19 @@ class TrelloClient:
         attachment = self.get_attachment(card_id, attachment_id)
         filename = attachment.get("fileName") or attachment.get("name") or "download"
 
-        # Use the Trello API download endpoint with authentication
+        # Use the Trello API download endpoint
         # Format: /cards/{cardId}/attachments/{attachmentId}/download/{filename}
         download_url = f"{self.BASE_URL}/cards/{card_id}/attachments/{attachment_id}/download/{filename}"
-        params = self._add_auth()
+
+        # CRITICAL: Attachment downloads require OAuth header authentication
+        # Query params were disabled for downloads on January 25, 2021
+        # See: https://community.developer.atlassian.com/t/update-authenticated-access-to-s3/43681
+        headers = {
+            "Authorization": f'OAuth oauth_consumer_key="{self.api_key}", oauth_token="{self.api_token}"'
+        }
 
         try:
-            response = self.client.get(download_url, params=params)
+            response = self.client.get(download_url, headers=headers)
             response.raise_for_status()
 
             # Write to output path

@@ -222,6 +222,53 @@ def create_card(
 
 
 @mcp.tool()
+def create_cards(
+    list_id: str,
+    cards: list[dict],
+    delay_ms: int = 0,
+    context: Context = None,
+) -> dict:
+    """Create multiple cards in a Trello list in one operation.
+
+    Args:
+        list_id: The ID of the list where all cards will be created
+        cards: List of card objects, each containing:
+            - name (required): Name of the card
+            - desc (optional): Description for the card
+            - pos (optional): Position (top, bottom, or a positive number)
+            - due (optional): Due date (ISO 8601 format: YYYY-MM-DDTHH:mm:ss.sssZ)
+        delay_ms: Optional delay in milliseconds between API calls (default: 0)
+
+    Returns:
+        Dict with:
+            - success_count: Number of cards created successfully
+            - error_count: Number of cards that failed
+            - results: List of results for each card (in order)
+            - created: List of successfully created card objects
+
+    Example:
+        create_cards(
+            list_id="abc123",
+            cards=[
+                {"name": "Task 1", "desc": "First task"},
+                {"name": "Task 2", "due": "2026-02-01T12:00:00.000Z"},
+                {"name": "Task 3", "pos": "top"}
+            ]
+        )
+    """
+    try:
+        client = get_client()
+        result = client.create_cards(list_id, cards, delay_ms)
+        context.info(
+            f"Created {result['success_count']}/{len(cards)} cards in list {list_id}"
+        )
+        return result
+    except Exception as e:
+        context.error(f"Failed to create cards in list {list_id}: {str(e)}")
+        return {"error": str(e), "list_id": list_id, "cards_count": len(cards)}
+
+
+@mcp.tool()
 def update_card(
     card_id: str,
     name: Optional[str] = None,
@@ -459,6 +506,108 @@ def add_checklist_item(
     except Exception as e:
         context.error(f"Failed to add item to checklist {checklist_id}: {str(e)}")
         return {"error": str(e), "checklist_id": checklist_id, "name": name}
+
+
+@mcp.tool()
+def add_checklist_items(
+    checklist_id: str,
+    items: list[dict],
+    delay_ms: int = 0,
+    context: Context = None,
+) -> dict:
+    """Add multiple items to a Trello checklist in one operation.
+
+    Args:
+        checklist_id: The ID of the checklist to add items to
+        items: List of item objects, each containing:
+            - name (required): Name/text of the checklist item
+            - checked (optional): Whether the item is checked (default: False)
+            - pos (optional): Position (top, bottom, or a positive number)
+        delay_ms: Optional delay in milliseconds between API calls (default: 0)
+
+    Returns:
+        Dict with:
+            - success_count: Number of items added successfully
+            - error_count: Number of items that failed
+            - results: List of results for each item (in order)
+            - created: List of successfully created item objects
+
+    Example:
+        add_checklist_items(
+            checklist_id="xyz789",
+            items=[
+                {"name": "Step 1: Research"},
+                {"name": "Step 2: Design", "checked": False},
+                {"name": "Step 3: Implement"},
+                {"name": "Step 4: Test", "pos": "bottom"}
+            ]
+        )
+    """
+    try:
+        client = get_client()
+        result = client.add_checklist_items(checklist_id, items, delay_ms)
+        context.info(
+            f"Added {result['success_count']}/{len(items)} items to checklist {checklist_id}"
+        )
+        return result
+    except Exception as e:
+        context.error(f"Failed to add items to checklist {checklist_id}: {str(e)}")
+        return {"error": str(e), "checklist_id": checklist_id, "items_count": len(items)}
+
+
+@mcp.tool()
+def create_checklist_with_items(
+    card_id: str,
+    name: str,
+    items: list[dict],
+    pos: Optional[str] = None,
+    delay_ms: int = 0,
+    context: Context = None,
+) -> dict:
+    """Create a new checklist on a card and populate it with items in one operation.
+
+    Args:
+        card_id: The ID of the card to add the checklist to
+        name: Name of the checklist
+        items: List of item objects, each containing:
+            - name (required): Name/text of the checklist item
+            - checked (optional): Whether the item is checked (default: False)
+            - pos (optional): Position (top, bottom, or a positive number)
+        pos: Position of the checklist (top, bottom, or a positive number)
+        delay_ms: Optional delay in milliseconds between API calls (default: 0)
+
+    Returns:
+        Dict with:
+            - checklist: The created checklist object
+            - items_success_count: Number of items added successfully
+            - items_error_count: Number of items that failed
+            - items_results: List of results for each item (in order)
+            - items_created: List of successfully created item objects
+
+    Example:
+        create_checklist_with_items(
+            card_id="card123",
+            name="Launch Checklist",
+            items=[
+                {"name": "Update documentation"},
+                {"name": "Run final tests"},
+                {"name": "Deploy to production"},
+                {"name": "Notify stakeholders"}
+            ]
+        )
+    """
+    try:
+        client = get_client()
+        result = client.create_checklist_with_items(
+            card_id, name, items, pos, delay_ms
+        )
+        context.info(
+            f"Created checklist '{name}' with {result['items_success_count']}/{len(items)} items"
+        )
+        return result
+    except Exception as e:
+        context.error(f"Failed to create checklist '{name}' on card {card_id}: {str(e)}")
+        return {"error": str(e), "card_id": card_id, "name": name}
 
 
 @mcp.tool()
