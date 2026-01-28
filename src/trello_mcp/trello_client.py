@@ -728,18 +728,17 @@ class TrelloClient:
         Raises:
             Exception: On API or file errors
         """
-        import os
-
-        # Get attachment details to find the download URL
+        # Get attachment details to find the filename
         attachment = self.get_attachment(card_id, attachment_id)
-        download_url = attachment.get("url")
+        filename = attachment.get("fileName") or attachment.get("name") or "download"
 
-        if not download_url:
-            raise Exception("Attachment has no download URL")
+        # Use the Trello API download endpoint with authentication
+        # Format: /cards/{cardId}/attachments/{attachmentId}/download/{filename}
+        download_url = f"{self.BASE_URL}/cards/{card_id}/attachments/{attachment_id}/download/{filename}"
+        params = self._add_auth()
 
         try:
-            # Download the file (Trello attachment URLs are pre-authenticated)
-            response = self.client.get(download_url)
+            response = self.client.get(download_url, params=params)
             response.raise_for_status()
 
             # Write to output path
@@ -750,11 +749,18 @@ class TrelloClient:
                 "success": True,
                 "path": output_path,
                 "size": len(response.content),
-                "name": attachment.get("name", "unknown"),
+                "name": filename,
                 "attachment_id": attachment_id,
             }
         except httpx.HTTPStatusError as e:
-            raise Exception(f"Failed to download attachment: {e.response.status_code}") from e
+            if e.response.status_code == 401:
+                raise Exception("Invalid Trello API credentials") from e
+            elif e.response.status_code == 404:
+                raise Exception(f"Attachment not found: {attachment_id}") from e
+            elif e.response.status_code == 429:
+                raise Exception("Trello API rate limit exceeded") from e
+            else:
+                raise Exception(f"Failed to download attachment: {e.response.status_code}") from e
         except httpx.RequestError as e:
             raise Exception(f"Network error during download: {str(e)}") from e
         except IOError as e:
