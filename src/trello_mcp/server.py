@@ -773,6 +773,160 @@ def clear_card_due_date(card_id: str, context: Context = None) -> dict:
         return {"error": str(e), "card_id": card_id}
 
 
+# ========== Attachment Tools ==========
+
+
+@mcp.tool()
+def get_card_attachments(card_id: str, context: Context) -> list[dict]:
+    """Get all attachments on a Trello card.
+
+    Args:
+        card_id: The ID of the card
+
+    Returns:
+        List of attachment objects with id, name, url, and other details
+    """
+    try:
+        client = get_client()
+        attachments = client.get_card_attachments(card_id)
+        context.info(f"Retrieved {len(attachments)} attachments from card {card_id}")
+        return attachments
+    except Exception as e:
+        context.error(f"Failed to get attachments for card {card_id}: {str(e)}")
+        return [{"error": str(e), "card_id": card_id}]
+
+
+@mcp.tool()
+def get_attachment(card_id: str, attachment_id: str, context: Context) -> dict:
+    """Get details of a specific attachment.
+
+    Args:
+        card_id: The ID of the card
+        attachment_id: The ID of the attachment
+
+    Returns:
+        Attachment object with detailed information
+    """
+    try:
+        client = get_client()
+        attachment = client.get_attachment(card_id, attachment_id)
+        context.info(f"Retrieved attachment: {attachment.get('name', attachment_id)}")
+        return attachment
+    except Exception as e:
+        context.error(f"Failed to get attachment {attachment_id}: {str(e)}")
+        return {"error": str(e), "card_id": card_id, "attachment_id": attachment_id}
+
+
+@mcp.tool()
+def add_attachment_url(
+    card_id: str,
+    url: str,
+    name: Optional[str] = None,
+    context: Context = None,
+) -> dict:
+    """Add a URL attachment to a Trello card.
+
+    Args:
+        card_id: The ID of the card
+        url: The URL to attach
+        name: Optional name for the attachment
+
+    Returns:
+        Created attachment object
+    """
+    try:
+        client = get_client()
+        attachment = client.add_attachment_url(card_id, url, name)
+        context.info(f"Added URL attachment to card {card_id}")
+        return attachment
+    except Exception as e:
+        context.error(f"Failed to add URL attachment to card {card_id}: {str(e)}")
+        return {"error": str(e), "card_id": card_id, "url": url}
+
+
+@mcp.tool()
+def add_attachment_file(
+    card_id: str,
+    file_path: str,
+    name: Optional[str] = None,
+    context: Context = None,
+) -> dict:
+    """Upload a local file as an attachment to a Trello card.
+
+    Args:
+        card_id: The ID of the card
+        file_path: Local path to the file to upload
+        name: Optional name for the attachment (defaults to filename)
+
+    Returns:
+        Created attachment object
+    """
+    try:
+        client = get_client()
+        attachment = client.add_attachment_file(card_id, file_path, name)
+        context.info(f"Uploaded file attachment to card {card_id}")
+        return attachment
+    except FileNotFoundError as e:
+        context.error(f"File not found: {file_path}")
+        return {"error": str(e), "card_id": card_id, "file_path": file_path}
+    except Exception as e:
+        context.error(f"Failed to upload attachment to card {card_id}: {str(e)}")
+        return {"error": str(e), "card_id": card_id, "file_path": file_path}
+
+
+@mcp.tool()
+def download_attachment(
+    card_id: str,
+    attachment_id: str,
+    output_path: str,
+    context: Context = None,
+) -> dict:
+    """Download an attachment from a Trello card to a local file.
+
+    Args:
+        card_id: The ID of the card
+        attachment_id: The ID of the attachment to download
+        output_path: Local path where the file will be saved
+
+    Returns:
+        Dict with download details (success, path, size, name)
+    """
+    try:
+        client = get_client()
+        result = client.download_attachment(card_id, attachment_id, output_path)
+        context.info(f"Downloaded attachment to {output_path}")
+        return result
+    except Exception as e:
+        context.error(f"Failed to download attachment {attachment_id}: {str(e)}")
+        return {
+            "error": str(e),
+            "card_id": card_id,
+            "attachment_id": attachment_id,
+            "output_path": output_path,
+        }
+
+
+@mcp.tool()
+def delete_attachment(card_id: str, attachment_id: str, context: Context) -> dict:
+    """Delete an attachment from a Trello card.
+
+    Args:
+        card_id: The ID of the card
+        attachment_id: The ID of the attachment to delete
+
+    Returns:
+        Response confirming deletion
+    """
+    try:
+        client = get_client()
+        result = client.delete_attachment(card_id, attachment_id)
+        context.info(f"Deleted attachment {attachment_id} from card {card_id}")
+        return {"success": True, "card_id": card_id, "attachment_id": attachment_id, "result": result}
+    except Exception as e:
+        context.error(f"Failed to delete attachment {attachment_id}: {str(e)}")
+        return {"error": str(e), "card_id": card_id, "attachment_id": attachment_id}
+
+
 # ========== Resources ==========
 
 

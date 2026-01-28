@@ -614,6 +614,164 @@ class TrelloClient:
         params = {"idLabels": ",".join(label_ids)}
         return self._request("PUT", f"/cards/{card_id}", params=params)
 
+    # Attachment methods
+
+    def get_card_attachments(self, card_id: str) -> list[dict[str, Any]]:
+        """Get all attachments on a card.
+
+        Args:
+            card_id: The card ID
+
+        Returns:
+            List of attachment objects
+        """
+        return self._request("GET", f"/cards/{card_id}/attachments")
+
+    def get_attachment(self, card_id: str, attachment_id: str) -> dict[str, Any]:
+        """Get details of a specific attachment.
+
+        Args:
+            card_id: The card ID
+            attachment_id: The attachment ID
+
+        Returns:
+            Attachment object with details
+        """
+        return self._request("GET", f"/cards/{card_id}/attachments/{attachment_id}")
+
+    def add_attachment_url(
+        self,
+        card_id: str,
+        url: str,
+        name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Add a URL attachment to a card.
+
+        Args:
+            card_id: The card ID
+            url: URL to attach
+            name: Optional name for the attachment
+
+        Returns:
+            Created attachment object
+        """
+        params = {"url": url}
+        if name:
+            params["name"] = name
+        return self._request("POST", f"/cards/{card_id}/attachments", params=params)
+
+    def add_attachment_file(
+        self,
+        card_id: str,
+        file_path: str,
+        name: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Upload a file attachment to a card.
+
+        Args:
+            card_id: The card ID
+            file_path: Local path to the file to upload
+            name: Optional name for the attachment (defaults to filename)
+
+        Returns:
+            Created attachment object
+
+        Raises:
+            FileNotFoundError: If the file doesn't exist
+            Exception: On API errors
+        """
+        import os
+
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        url = f"{self.BASE_URL}/cards/{card_id}/attachments"
+        params = self._add_auth()
+
+        # Use the provided name or default to the filename
+        attachment_name = name or os.path.basename(file_path)
+
+        try:
+            with open(file_path, "rb") as f:
+                files = {"file": (attachment_name, f)}
+                response = self.client.post(url, params=params, files=files)
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                raise Exception("Invalid Trello API credentials") from e
+            elif e.response.status_code == 404:
+                raise Exception(f"Card not found: {card_id}") from e
+            elif e.response.status_code == 429:
+                raise Exception("Trello API rate limit exceeded") from e
+            else:
+                raise Exception(f"Trello API error: {e.response.status_code}") from e
+        except httpx.RequestError as e:
+            raise Exception(f"Network error: {str(e)}") from e
+
+    def download_attachment(
+        self,
+        card_id: str,
+        attachment_id: str,
+        output_path: str,
+    ) -> dict[str, Any]:
+        """Download an attachment to a local file.
+
+        Args:
+            card_id: The card ID
+            attachment_id: The attachment ID
+            output_path: Local path to save the file
+
+        Returns:
+            Dict with download details (path, size, name)
+
+        Raises:
+            Exception: On API or file errors
+        """
+        import os
+
+        # Get attachment details to find the download URL
+        attachment = self.get_attachment(card_id, attachment_id)
+        download_url = attachment.get("url")
+
+        if not download_url:
+            raise Exception("Attachment has no download URL")
+
+        try:
+            # Download the file (Trello attachment URLs are pre-authenticated)
+            response = self.client.get(download_url)
+            response.raise_for_status()
+
+            # Write to output path
+            with open(output_path, "wb") as f:
+                f.write(response.content)
+
+            return {
+                "success": True,
+                "path": output_path,
+                "size": len(response.content),
+                "name": attachment.get("name", "unknown"),
+                "attachment_id": attachment_id,
+            }
+        except httpx.HTTPStatusError as e:
+            raise Exception(f"Failed to download attachment: {e.response.status_code}") from e
+        except httpx.RequestError as e:
+            raise Exception(f"Network error during download: {str(e)}") from e
+        except IOError as e:
+            raise Exception(f"Failed to write file: {str(e)}") from e
+
+    def delete_attachment(self, card_id: str, attachment_id: str) -> dict[str, Any]:
+        """Delete an attachment from a card.
+
+        Args:
+            card_id: The card ID
+            attachment_id: The attachment ID to delete
+
+        Returns:
+            Response confirming deletion
+        """
+        return self._request("DELETE", f"/cards/{card_id}/attachments/{attachment_id}")
+
     def close(self):
         """Close the HTTP client."""
         self.client.close()
