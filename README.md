@@ -8,6 +8,11 @@ A Model Context Protocol (MCP) server that provides seamless integration with Tr
 - **List Operations**: Create, view, and archive lists on boards
 - **Card CRUD**: Full create, read, update, delete operations for cards
 - **Card Movement**: Move cards between lists with position control
+- **Checklist Management**: Create checklists with items, update progress, and manage checklist items
+- **Label Management**: Create, assign, and manage labels on boards and cards
+- **Due Date Management**: Set, update, and track due dates on cards
+- **Attachment Management**: Upload files, attach URLs, and download attachments from cards
+- **Batch Operations**: Create multiple cards or checklist items in a single operation
 - **MCP Resources**: Load board, list, and card data into LLM context for analysis
 - **Secure Authentication**: API key and token-based authentication via environment variables
 
@@ -146,10 +151,51 @@ The server provides the following tools that you can use through natural languag
 
 - `list_cards(list_id)` - Get all cards in a list
 - `get_card(card_id)` - Get details of a specific card
-- `create_card(list_id, name, desc?, pos?)` - Create a new card
-- `update_card(card_id, name?, desc?, list_id?)` - Update a card
+- `create_card(list_id, name, desc?, pos?, due?)` - Create a new card
+- `create_cards(list_id, cards, delay_ms?)` - Create multiple cards in one operation
+- `update_card(card_id, name?, desc?, list_id?, due?, due_complete?)` - Update a card
 - `delete_card(card_id)` - Delete a card
 - `move_card(card_id, list_id, pos?)` - Move a card to another list
+
+### Checklist Tools
+
+- `get_card_checklists(card_id)` - Get all checklists on a card
+- `create_checklist(card_id, name, pos?)` - Create a new checklist on a card
+- `get_checklist(checklist_id)` - Get details of a checklist
+- `update_checklist(checklist_id, name?, pos?)` - Update a checklist
+- `delete_checklist(checklist_id)` - Delete a checklist
+- `get_checklist_items(checklist_id)` - Get all items in a checklist
+- `add_checklist_item(checklist_id, name, checked?, pos?)` - Add an item to a checklist
+- `add_checklist_items(checklist_id, items, delay_ms?)` - Add multiple items to a checklist
+- `create_checklist_with_items(card_id, name, items, pos?, delay_ms?)` - Create a checklist with items in one operation
+- `update_checklist_item(card_id, checklist_item_id, name?, state?, pos?)` - Update a checklist item
+- `delete_checklist_item(checklist_id, checklist_item_id)` - Delete a checklist item
+
+### Label Tools
+
+- `get_board_labels(board_id)` - Get all labels on a board
+- `create_label(board_id, name, color?)` - Create a new label on a board
+- `update_label(label_id, name?, color?)` - Update a label
+- `delete_label(label_id)` - Delete a label
+- `get_card_labels(card_id)` - Get all labels assigned to a card
+- `add_label_to_card(card_id, label_id)` - Add a label to a card
+- `remove_label_from_card(card_id, label_id)` - Remove a label from a card
+- `set_card_labels(card_id, label_ids)` - Set all labels on a card (replaces existing)
+
+### Due Date Tools
+
+- `set_card_due_date(card_id, due_date)` - Set or update a card's due date
+- `mark_due_date_complete(card_id, complete?)` - Mark due date as complete/incomplete
+- `clear_card_due_date(card_id)` - Remove the due date from a card
+
+### Attachment Tools
+
+- `get_card_attachments(card_id)` - Get all attachments on a card
+- `get_attachment(card_id, attachment_id)` - Get details of an attachment
+- `add_attachment_url(card_id, url, name?)` - Attach a URL to a card
+- `add_attachment_file(card_id, file_path, name?)` - Upload a local file as an attachment
+- `download_attachment(card_id, attachment_id, output_path)` - Download an attachment to a local file
+- `delete_attachment(card_id, attachment_id)` - Delete an attachment
 
 ## Available Resources
 
@@ -180,6 +226,21 @@ Once configured, you can interact with Trello naturally:
 
 **"Load the full context of board abc123"**
 - Claude will use the resource `trello://board/abc123` to load all data
+
+**"Create a checklist called 'Launch Tasks' on this card with items for documentation, testing, and deployment"**
+- Claude will call `create_checklist_with_items()` to create the checklist with all items at once
+
+**"Add the 'High Priority' label to this card"**
+- Claude will find the label ID and call `add_label_to_card()`
+
+**"Set a due date for next Friday on this task"**
+- Claude will call `set_card_due_date()` with the appropriate ISO 8601 date
+
+**"Attach this requirements document to the card"**
+- Claude will call `add_attachment_file()` to upload the document
+
+**"Create 5 cards for each team member's tasks"**
+- Claude will call `create_cards()` to batch create all cards efficiently
 
 ## Development
 
